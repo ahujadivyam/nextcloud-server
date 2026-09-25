@@ -60,7 +60,6 @@ use OC\Files\Config\MountProviderCollection;
 use OC\Files\Config\UserMountCache;
 use OC\Files\Conversion\ConversionManager;
 use OC\Files\FilenameValidator;
-use OC\Files\Listeners\UserMountCacheListener;
 use OC\Files\Lock\LockManager;
 use OC\Files\Mount\CacheMountProvider;
 use OC\Files\Mount\LocalHomeMountProvider;
@@ -491,7 +490,16 @@ class Server extends ServerContainer {
 
 		$this->registerAlias(IURLGenerator::class, URLGenerator::class);
 
-		$this->registerAlias(ICache::class, Cache\File::class);
+		$this->registerService(ICache::class, static function ($c) {
+			/** @var LoggerInterface $logger */
+			$logger = $c->get(LoggerInterface::class);
+			$logger->debug('The requested service "' . ICache::class . '" is deprecated. Please use "' . ICacheFactory::class . '" instead to create a cache. This service will be removed in a future Nextcloud version.', ['app' => 'serverDI']);
+
+			/** @var ICacheFactory $cacheFactory */
+			$cacheFactory = $c->get(ICacheFactory::class);
+			return $cacheFactory->isLocalCacheAvailable() ? $cacheFactory->createLocal() : $cacheFactory->createInMemory();
+		});
+
 		$this->registerService(Factory::class, static function (Server $c) {
 			$profiler = $c->get(IProfiler::class);
 			$logger = $c->get(LoggerInterface::class);
@@ -1127,7 +1135,6 @@ class Server extends ServerContainer {
 		$eventDispatcher->addServiceListener(BeforeUserDeletedEvent::class, BeforeUserDeletedListener::class);
 		$eventDispatcher->addServiceListener(UserDeletedEvent::class, SubAdmin::class);
 		$eventDispatcher->addServiceListener(GroupDeletedEvent::class, SubAdmin::class);
-		$eventDispatcher->addServiceListener(UserDeletedEvent::class, UserMountCacheListener::class);
 
 		FilesMetadataManager::loadListeners($eventDispatcher);
 		GenerateBlurhashMetadata::loadListeners($eventDispatcher);
